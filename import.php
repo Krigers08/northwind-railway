@@ -63,16 +63,22 @@ try {
         ['customer_id','company_name','contact_name','contact_title','address','city','region','postal_code','country','phone','fax']);
     echo "Customers: $n\n";
 
-    // Employees
+// Employees - insert without reports_to first to avoid self-referencing FK violation
     $n = import_csv($pdo, "$csv_dir/Employees.csv", 'employees',
         ['employee_id','last_name','first_name','title','title_of_courtesy','birth_date','hire_date',
-         'address','city','region','postal_code','country','home_phone','extension','notes','reports_to','photo_path'],
+         'address','city','region','postal_code','country','home_phone','extension','notes','photo_path'],
         function($row) {
-            // reports_to empty -> null
-            if (isset($row[15]) && $row[15] === '') $row[15] = null;
-            return $row;
+            return array_merge(array_slice($row, 0, 15), [array_slice($row, 16)[0] ?? null]);
         }
     );
+    $handle = fopen("$csv_dir/Employees.csv", 'r');
+    fgetcsv($handle);
+    $upd = $pdo->prepare("UPDATE employees SET reports_to = :rt WHERE employee_id = :id");
+    while (($row = fgetcsv($handle)) !== false) {
+        $rt = (isset($row[15]) && $row[15] !== '') ? (int)$row[15] : null;
+        $upd->execute([':rt' => $rt, ':id' => (int)$row[0]]);
+    }
+    fclose($handle);
     echo "Employees: $n\n";
 
     // Employee Territories
