@@ -1,27 +1,26 @@
 <?php
-// db.php - Database connection using Railway env vars
-
 function get_pdo(): PDO {
-    $database_url = getenv('DATABASE_URL');
+    // Try DATABASE_PUBLIC_URL first, then DATABASE_URL, then individual vars
+    $url = getenv('DATABASE_PUBLIC_URL') ?: getenv('DATABASE_URL');
 
-    if ($database_url) {
-        $url = parse_url($database_url);
-        $host = $url['host'];
-        $port = $url['port'] ?? 5432;
-        $dbname = ltrim($url['path'], '/');
-        $user = $url['user'];
-        $pass = $url['pass'];
+    if ($url) {
+        $parts = parse_url($url);
+        $host   = $parts['host'];
+        $port   = $parts['port'] ?? 5432;
+        $dbname = ltrim($parts['path'], '/');
+        $user   = $parts['user'];
+        $pass   = $parts['pass'];
     } else {
-        $host     = getenv('PGHOST')     ?: 'localhost';
-        $port     = getenv('PGPORT')     ?: '5432';
-        $dbname   = getenv('PGDATABASE') ?: 'northwind';
-        $user     = getenv('PGUSER')     ?: 'postgres';
-        $pass     = getenv('PGPASSWORD') ?: '';
+        $host   = getenv('DB_HOST')     ?: 'localhost';
+        $port   = getenv('DB_PORT')     ?: '5432';
+        $dbname = getenv('DB_NAME')     ?: 'railway';
+        $user   = getenv('DB_USER')     ?: 'postgres';
+        $pass   = getenv('DB_PASSWORD') ?: '';
     }
 
     $dsn = "pgsql:host=$host;port=$port;dbname=$dbname";
     return new PDO($dsn, $user, $pass, [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
     ]);
 }
