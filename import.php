@@ -1,5 +1,5 @@
 <?php
-// import.php - Run this once to load CSV data into MySQL
+// import.php - Run this once to load CSV data into SQLite
 // Usage: php import.php  (or visit /import.php in browser, protected by secret)
 
 $secret = getenv('IMPORT_SECRET') ?: 'changeme';
@@ -56,7 +56,7 @@ function import_csv(PDO $pdo, string $file, string $table, array $columns, calla
                 }
                 $placeholders_array[] = '(' . implode(', ', $row_placeholders) . ')';
             }
-            $sql = "INSERT IGNORE INTO $table ($cols) VALUES " . implode(', ', $placeholders_array);
+            $sql = "INSERT OR IGNORE INTO $table ($cols) VALUES " . implode(', ', $placeholders_array);
             
             $stmt = $pdo->prepare($sql);
             $stmt->execute($merged_params);
@@ -77,7 +77,7 @@ function import_csv(PDO $pdo, string $file, string $table, array $columns, calla
             }
             $placeholders_array[] = '(' . implode(', ', $row_placeholders) . ')';
         }
-        $sql = "INSERT IGNORE INTO $table ($cols) VALUES " . implode(', ', $placeholders_array);
+        $sql = "INSERT OR IGNORE INTO $table ($cols) VALUES " . implode(', ', $placeholders_array);
         
         $merged_params = [];
         foreach ($batch as $i => $row_params) {
