@@ -109,7 +109,7 @@ tr:hover td { background: #f9fafb; }
       <?php
         $rows = $pdo->query("
           SELECT p.product_name, c.category_name,
-                 SUM(od.unit_price * od.quantity * (1 - od.discount))::numeric(12,2) AS revenue
+                 SUM(od.unit_price * od.quantity * (1 - od.discount)) AS revenue
           FROM order_details od
           JOIN products p ON p.product_id = od.product_id
           JOIN categories c ON c.category_id = p.category_id
@@ -170,7 +170,7 @@ tr:hover td { background: #f9fafb; }
     $conditions = [];
     $params = [];
     if ($search) {
-      $conditions[] = "company_name ILIKE :q";
+      $conditions[] = "company_name LIKE :q";
       $params[':q'] = "%$search%";
     }
     if ($country_filter) {
@@ -433,7 +433,7 @@ tr:hover td { background: #f9fafb; }
     $conditions = [];
     $params = [];
     if ($search) {
-      $conditions[] = "company_name ILIKE :q";
+      $conditions[] = "company_name LIKE :q";
       $params[':q'] = "%$search%";
     }
     if ($country_filter) {
