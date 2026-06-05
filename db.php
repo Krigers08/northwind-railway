@@ -18,11 +18,20 @@ function get_pdo(): PDO {
         $pass   = getenv('DB_PASSWORD') ?: '';
     }
 
-    $dsn = "mysql:host=$host;port=$port;dbname=$dbname;charset=utf8mb4;ssl=0";
+    $dsn = "mysql:host=$host;port=$port;dbname=$dbname;charset=utf8mb4";
     $options = [
         PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => false,
     ];
+    
+    // Try to disable SSL verification and allow unencrypted connections
+    if (defined('PDO::MYSQL_ATTR_SSL_CAPATH')) {
+        $options[PDO::MYSQL_ATTR_SSL_CAPATH] = null;
+    }
+    if (defined('PDO::MYSQL_ATTR_SSL_CA')) {
+        $options[PDO::MYSQL_ATTR_SSL_CA] = null;
+    }
     
     return new PDO($dsn, $user, $pass, $options);
 }
