@@ -6,6 +6,14 @@ $search = trim($_GET['q'] ?? '');
 $offset = max(0, (int)($_GET['offset'] ?? 0));
 $limit = 25;
 
+// Filter parameters
+$country_filter = $_GET['country'] ?? '';
+$category_filter = $_GET['category'] ?? '';
+$supplier_filter = $_GET['supplier'] ?? '';
+$status_filter = $_GET['status'] ?? '';
+$city_filter = $_GET['city'] ?? '';
+$title_filter = $_GET['title'] ?? '';
+
 function paginate_links(string $page, int $offset, int $limit, int $total, array $extra = []): string {
     $params = array_merge(['page' => $page, 'offset' => $offset - $limit], $extra);
     $prev = $offset > 0 ? '<a href="?'.http_build_query($params).'">&#8592; Prev</a>' : '<span class="disabled">&#8592; Prev</span>';
@@ -14,6 +22,14 @@ function paginate_links(string $page, int $offset, int $limit, int $total, array
     $from = $total ? $offset + 1 : 0;
     $to = min($offset + $limit, $total);
     return "<div class='pagination'>$prev <span>$from&ndash;$to of $total</span> $next</div>";
+}
+
+function build_filter_params(array $filters = []): array {
+    $params = [];
+    foreach ($filters as $key => $value) {
+        if (!empty($value)) $params[$key] = $value;
+    }
+    return $params;
 }
 ?>
 <!DOCTYPE html>
@@ -35,9 +51,13 @@ nav .brand { color: #fff; font-weight: 700; font-size: 16px; margin-right: 16px;
 .card .num { font-size: 2rem; font-weight: 700; color: #4f46e5; }
 .card .label { font-size: 13px; color: #6b7280; margin-top: 4px; }
 h2 { font-size: 18px; margin-bottom: 16px; color: #1a1a2e; }
-.search-bar { display: flex; gap: 8px; margin-bottom: 16px; }
-.search-bar input { flex: 1; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; }
+.search-bar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; align-items: center; }
+.search-bar input { flex: 1; min-width: 200px; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; }
+.search-bar select { padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; background: #fff; }
 .search-bar button { padding: 8px 16px; background: #4f46e5; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; }
+.search-bar button:hover { background: #4338ca; }
+.search-bar a { padding: 8px 16px; background: #9ca3af; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; text-decoration: none; }
+.search-bar a:hover { background: #6b7280; }
 table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
 th { background: #f9fafb; text-align: left; padding: 10px 14px; font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: .05em; border-bottom: 1px solid #e5e7eb; }
 td { padding: 10px 14px; font-size: 14px; border-bottom: 1px solid #f3f4f6; }
@@ -54,7 +74,7 @@ tr:hover td { background: #f9fafb; }
 </head>
 <body>
 <nav>
-  <span class="brand">Northwind</span>
+  <span class="brand">Data Viewer</span>
   <a href="?page=dashboard" class="<?= $page==='dashboard'?'active':'' ?>">Dashboard</a>
   <a href="?page=customers" class="<?= $page==='customers'?'active':'' ?>">Customers</a>
   <a href="?page=products" class="<?= $page==='products'?'active':'' ?>">Products</a>
@@ -126,12 +146,42 @@ tr:hover td { background: #f9fafb; }
   <h2>Customers</h2>
   <form class="search-bar" method="get">
     <input type="hidden" name="page" value="customers">
-    <input type="text" name="q" value="<?= htmlspecialchars($search) ?>" placeholder="Search by company or country...">
+    <input type="text" name="q" value="<?= htmlspecialchars($search) ?>" placeholder="Search by company...">
+    <?php
+      $countries = $pdo->query("SELECT DISTINCT country FROM customers ORDER BY country")->fetchAll(PDO::FETCH_COLUMN);
+      $cities = $pdo->query("SELECT DISTINCT city FROM customers ORDER BY city")->fetchAll(PDO::FETCH_COLUMN);
+    ?>
+    <select name="country">
+      <option value="">All Countries</option>
+      <?php foreach ($countries as $c): ?>
+      <option value="<?= htmlspecialchars($c) ?>" <?= $country_filter === $c ? 'selected' : '' ?>><?= htmlspecialchars($c) ?></option>
+      <?php endforeach; ?>
+    </select>
+    <select name="city">
+      <option value="">All Cities</option>
+      <?php foreach ($cities as $c): ?>
+      <option value="<?= htmlspecialchars($c) ?>" <?= $city_filter === $c ? 'selected' : '' ?>><?= htmlspecialchars($c) ?></option>
+      <?php endforeach; ?>
+    </select>
     <button type="submit">Search</button>
+    <a href="?page=customers">Reset</a>
   </form>
   <?php
-    $where = $search ? "WHERE company_name ILIKE :q OR country ILIKE :q2" : "";
-    $params = $search ? [':q' => "%$search%", ':q2' => "%$search%"] : [];
+    $conditions = [];
+    $params = [];
+    if ($search) {
+      $conditions[] = "company_name ILIKE :q";
+      $params[':q'] = "%$search%";
+    }
+    if ($country_filter) {
+      $conditions[] = "country = :country";
+      $params[':country'] = $country_filter;
+    }
+    if ($city_filter) {
+      $conditions[] = "city = :city";
+      $params[':city'] = $city_filter;
+    }
+    $where = $conditions ? "WHERE " . implode(" AND ", $conditions) : "";
     $total = $pdo->prepare("SELECT COUNT(*) FROM customers $where");
     $total->execute($params);
     $total = (int)$total->fetchColumn();
@@ -150,18 +200,57 @@ tr:hover td { background: #f9fafb; }
         <td><?= htmlspecialchars($r['phone']) ?></td></tr>
     <?php endforeach; ?>
   </table>
-  <?= paginate_links('customers', $offset, $limit, $total, $search ? ['q' => $search] : []) ?>
+  <?= paginate_links('customers', $offset, $limit, $total, build_filter_params(['q' => $search, 'country' => $country_filter, 'city' => $city_filter])) ?>
 
 <?php elseif ($page === 'products'): ?>
   <h2>Products</h2>
   <form class="search-bar" method="get">
     <input type="hidden" name="page" value="products">
     <input type="text" name="q" value="<?= htmlspecialchars($search) ?>" placeholder="Search by product name...">
+    <?php
+      $categories = $pdo->query("SELECT DISTINCT category_id, category_name FROM categories ORDER BY category_name")->fetchAll(PDO::FETCH_ASSOC);
+      $suppliers = $pdo->query("SELECT DISTINCT supplier_id, company_name FROM suppliers ORDER BY company_name")->fetchAll(PDO::FETCH_ASSOC);
+    ?>
+    <select name="category">
+      <option value="">All Categories</option>
+      <?php foreach ($categories as $c): ?>
+      <option value="<?= $c['category_id'] ?>" <?= $category_filter === (string)$c['category_id'] ? 'selected' : '' ?>><?= htmlspecialchars($c['category_name']) ?></option>
+      <?php endforeach; ?>
+    </select>
+    <select name="supplier">
+      <option value="">All Suppliers</option>
+      <?php foreach ($suppliers as $s): ?>
+      <option value="<?= $s['supplier_id'] ?>" <?= $supplier_filter === (string)$s['supplier_id'] ? 'selected' : '' ?>><?= htmlspecialchars($s['company_name']) ?></option>
+      <?php endforeach; ?>
+    </select>
+    <select name="status">
+      <option value="">All Status</option>
+      <option value="active" <?= $status_filter === 'active' ? 'selected' : '' ?>>Active</option>
+      <option value="discontinued" <?= $status_filter === 'discontinued' ? 'selected' : '' ?>>Discontinued</option>
+    </select>
     <button type="submit">Search</button>
+    <a href="?page=products">Reset</a>
   </form>
   <?php
-    $where = $search ? "WHERE p.product_name ILIKE :q" : "";
-    $params = $search ? [':q' => "%$search%"] : [];
+    $conditions = [];
+    $params = [];
+    if ($search) {
+      $conditions[] = "p.product_name ILIKE :q";
+      $params[':q'] = "%$search%";
+    }
+    if ($category_filter) {
+      $conditions[] = "p.category_id = :category";
+      $params[':category'] = (int)$category_filter;
+    }
+    if ($supplier_filter) {
+      $conditions[] = "p.supplier_id = :supplier";
+      $params[':supplier'] = (int)$supplier_filter;
+    }
+    if ($status_filter) {
+      $conditions[] = "p.discontinued = :status";
+      $params[':status'] = $status_filter === 'discontinued' ? 1 : 0;
+    }
+    $where = $conditions ? "WHERE " . implode(" AND ", $conditions) : "";
     $total = $pdo->prepare("SELECT COUNT(*) FROM products p $where");
     $total->execute($params);
     $total = (int)$total->fetchColumn();
@@ -187,18 +276,49 @@ tr:hover td { background: #f9fafb; }
         <td><?= $r['discontinued'] ? '<span class="badge badge-red">Discontinued</span>' : '<span class="badge badge-green">Active</span>' ?></td></tr>
     <?php endforeach; ?>
   </table>
-  <?= paginate_links('products', $offset, $limit, $total, $search ? ['q' => $search] : []) ?>
+  <?= paginate_links('products', $offset, $limit, $total, build_filter_params(['q' => $search, 'category' => $category_filter, 'supplier' => $supplier_filter, 'status' => $status_filter])) ?>
 
 <?php elseif ($page === 'orders'): ?>
   <h2>Orders</h2>
   <form class="search-bar" method="get">
     <input type="hidden" name="page" value="orders">
-    <input type="text" name="q" value="<?= htmlspecialchars($search) ?>" placeholder="Search by customer ID or ship country...">
+    <input type="text" name="q" value="<?= htmlspecialchars($search) ?>" placeholder="Search by customer ID...">
+    <?php
+      $countries = $pdo->query("SELECT DISTINCT ship_country FROM orders WHERE ship_country IS NOT NULL ORDER BY ship_country")->fetchAll(PDO::FETCH_COLUMN);
+    ?>
+    <select name="country">
+      <option value="">All Countries</option>
+      <?php foreach ($countries as $c): ?>
+      <option value="<?= htmlspecialchars($c) ?>" <?= $country_filter === $c ? 'selected' : '' ?>><?= htmlspecialchars($c) ?></option>
+      <?php endforeach; ?>
+    </select>
+    <select name="status">
+      <option value="">All Status</option>
+      <option value="shipped" <?= $status_filter === 'shipped' ? 'selected' : '' ?>>Shipped</option>
+      <option value="pending" <?= $status_filter === 'pending' ? 'selected' : '' ?>>Pending</option>
+    </select>
     <button type="submit">Search</button>
+    <a href="?page=orders">Reset</a>
   </form>
   <?php
-    $where = $search ? "WHERE o.customer_id ILIKE :q OR o.ship_country ILIKE :q2" : "";
-    $params = $search ? [':q' => "%$search%", ':q2' => "%$search%"] : [];
+    $conditions = [];
+    $params = [];
+    if ($search) {
+      $conditions[] = "o.customer_id ILIKE :q";
+      $params[':q'] = "%$search%";
+    }
+    if ($country_filter) {
+      $conditions[] = "o.ship_country = :country";
+      $params[':country'] = $country_filter;
+    }
+    if ($status_filter) {
+      if ($status_filter === 'shipped') {
+        $conditions[] = "o.shipped_date IS NOT NULL";
+      } elseif ($status_filter === 'pending') {
+        $conditions[] = "o.shipped_date IS NULL";
+      }
+    }
+    $where = $conditions ? "WHERE " . implode(" AND ", $conditions) : "";
     $total = $pdo->prepare("SELECT COUNT(*) FROM orders o $where");
     $total->execute($params);
     $total = (int)$total->fetchColumn();
@@ -224,17 +344,54 @@ tr:hover td { background: #f9fafb; }
         <td>$<?= number_format($r['freight'], 2) ?></td></tr>
     <?php endforeach; ?>
   </table>
-  <?= paginate_links('orders', $offset, $limit, $total, $search ? ['q' => $search] : []) ?>
+  <?= paginate_links('orders', $offset, $limit, $total, build_filter_params(['q' => $search, 'country' => $country_filter, 'status' => $status_filter])) ?>
 
 <?php elseif ($page === 'employees'): ?>
   <h2>Employees</h2>
+  <form class="search-bar" method="get">
+    <input type="hidden" name="page" value="employees">
+    <input type="text" name="q" value="<?= htmlspecialchars($search) ?>" placeholder="Search by name...">
+    <?php
+      $titles = $pdo->query("SELECT DISTINCT title FROM employees ORDER BY title")->fetchAll(PDO::FETCH_COLUMN);
+      $countries = $pdo->query("SELECT DISTINCT country FROM employees ORDER BY country")->fetchAll(PDO::FETCH_COLUMN);
+    ?>
+    <select name="title">
+      <option value="">All Titles</option>
+      <?php foreach ($titles as $t): ?>
+      <option value="<?= htmlspecialchars($t) ?>" <?= $title_filter === $t ? 'selected' : '' ?>><?= htmlspecialchars($t) ?></option>
+      <?php endforeach; ?>
+    </select>
+    <select name="country">
+      <option value="">All Countries</option>
+      <?php foreach ($countries as $c): ?>
+      <option value="<?= htmlspecialchars($c) ?>" <?= $country_filter === $c ? 'selected' : '' ?>><?= htmlspecialchars($c) ?></option>
+      <?php endforeach; ?>
+    </select>
+    <button type="submit">Search</button>
+    <a href="?page=employees">Reset</a>
+  </form>
   <?php
-    $rows = $pdo->query("
+    $conditions = [];
+    $params = [];
+    if ($search) {
+      $conditions[] = "(e.first_name ILIKE :q OR e.last_name ILIKE :q)";
+      $params[':q'] = "%$search%";
+    }
+    if ($title_filter) {
+      $conditions[] = "e.title = :title";
+      $params[':title'] = $title_filter;
+    }
+    if ($country_filter) {
+      $conditions[] = "e.country = :country";
+      $params[':country'] = $country_filter;
+    }
+    $where = $conditions ? "WHERE " . implode(" AND ", $conditions) : "";
+    $rows = $pdo->prepare("
       SELECT e.employee_id, e.first_name, e.last_name, e.title, e.city, e.country,
              CONCAT(m.first_name, ' ', m.last_name) AS manager
       FROM employees e
       LEFT JOIN employees m ON m.employee_id = e.reports_to
-      ORDER BY e.last_name")->fetchAll();
+      $where ORDER BY e.last_name")->fetchAll();
   ?>
   <table>
     <tr><th>#</th><th>Name</th><th>Title</th><th>City</th><th>Country</th><th>Reports To</th></tr>
@@ -252,12 +409,42 @@ tr:hover td { background: #f9fafb; }
   <h2>Suppliers</h2>
   <form class="search-bar" method="get">
     <input type="hidden" name="page" value="suppliers">
-    <input type="text" name="q" value="<?= htmlspecialchars($search) ?>" placeholder="Search by company or country...">
+    <input type="text" name="q" value="<?= htmlspecialchars($search) ?>" placeholder="Search by company...">
+    <?php
+      $countries = $pdo->query("SELECT DISTINCT country FROM suppliers ORDER BY country")->fetchAll(PDO::FETCH_COLUMN);
+      $cities = $pdo->query("SELECT DISTINCT city FROM suppliers ORDER BY city")->fetchAll(PDO::FETCH_COLUMN);
+    ?>
+    <select name="country">
+      <option value="">All Countries</option>
+      <?php foreach ($countries as $c): ?>
+      <option value="<?= htmlspecialchars($c) ?>" <?= $country_filter === $c ? 'selected' : '' ?>><?= htmlspecialchars($c) ?></option>
+      <?php endforeach; ?>
+    </select>
+    <select name="city">
+      <option value="">All Cities</option>
+      <?php foreach ($cities as $c): ?>
+      <option value="<?= htmlspecialchars($c) ?>" <?= $city_filter === $c ? 'selected' : '' ?>><?= htmlspecialchars($c) ?></option>
+      <?php endforeach; ?>
+    </select>
     <button type="submit">Search</button>
+    <a href="?page=suppliers">Reset</a>
   </form>
   <?php
-    $where = $search ? "WHERE company_name ILIKE :q OR country ILIKE :q2" : "";
-    $params = $search ? [':q' => "%$search%", ':q2' => "%$search%"] : [];
+    $conditions = [];
+    $params = [];
+    if ($search) {
+      $conditions[] = "company_name ILIKE :q";
+      $params[':q'] = "%$search%";
+    }
+    if ($country_filter) {
+      $conditions[] = "country = :country";
+      $params[':country'] = $country_filter;
+    }
+    if ($city_filter) {
+      $conditions[] = "city = :city";
+      $params[':city'] = $city_filter;
+    }
+    $where = $conditions ? "WHERE " . implode(" AND ", $conditions) : "";
     $total = $pdo->prepare("SELECT COUNT(*) FROM suppliers $where");
     $total->execute($params);
     $total = (int)$total->fetchColumn();
@@ -276,7 +463,7 @@ tr:hover td { background: #f9fafb; }
         <td><?= htmlspecialchars($r['phone']) ?></td></tr>
     <?php endforeach; ?>
   </table>
-  <?= paginate_links('suppliers', $offset, $limit, $total, $search ? ['q' => $search] : []) ?>
+  <?= paginate_links('suppliers', $offset, $limit, $total, build_filter_params(['q' => $search, 'country' => $country_filter, 'city' => $city_filter])) ?>
 
 <?php endif; ?>
 </div>
