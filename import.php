@@ -18,24 +18,78 @@ function import_csv(PDO $pdo, string $file, string $table, array $columns, calla
     if (!$handle) throw new Exception("Cannot open $file");
     fgetcsv($handle); // skip header
     $count = 0;
+    $batch_size = 500;
+    $batch = [];
     $cols = implode(', ', $columns);
-    $placeholders = implode(', ', array_map(fn($c) => ":$c", $columns));
-    $stmt = $pdo->prepare("INSERT IGNORE INTO $table ($cols) VALUES ($placeholders)");
+    
     while (($row = fgetcsv($handle)) !== false) {
         if ($transform) $row = $transform($row);
         if (!$row) continue;
+        
         $params = [];
         foreach ($columns as $i => $col) {
             $val = $row[$i] ?? null;
             $params[":$col"] = ($val === '' || $val === null) ? null : $val;
         }
-        $stmt->execute($params);
+        $batch[] = $params;
         $count++;
-        if ($count % 50 === 0) {
+        
+        if (count($batch) >= $batch_size) {
+            // Execute batch insert
+            $placeholders = implode(', ', array_map(fn($c) => ":$c", $columns));
+            $values = implode('), (', array_fill(0, count($batch), $placeholders));
+            $sql = "INSERT IGNORE INTO $table ($cols) VALUES ($values)";
+            
+            $merged_params = [];
+            foreach ($batch as $i => $row_params) {
+                foreach ($row_params as $key => $val) {
+                    $merged_params[$key . '_' . $i] = $val;
+                }
+            }
+            
+            // Rebuild SQL with unique param names
+            $placeholders_array = [];
+            foreach ($batch as $i => $row_params) {
+                $row_placeholders = [];
+                foreach ($columns as $j => $col) {
+                    $row_placeholders[] = ":$col" . "_$i";
+                }
+                $placeholders_array[] = '(' . implode(', ', $row_placeholders) . ')';
+            }
+            $sql = "INSERT IGNORE INTO $table ($cols) VALUES " . implode(', ', $placeholders_array);
+            
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($merged_params);
+            
             echo "  $table: $count rows\n";
             flush();
+            $batch = [];
         }
     }
+    
+    // Insert remaining batch
+    if (!empty($batch)) {
+        $placeholders_array = [];
+        foreach ($batch as $i => $row_params) {
+            $row_placeholders = [];
+            foreach ($columns as $j => $col) {
+                $row_placeholders[] = ":$col" . "_$i";
+            }
+            $placeholders_array[] = '(' . implode(', ', $row_placeholders) . ')';
+        }
+        $sql = "INSERT IGNORE INTO $table ($cols) VALUES " . implode(', ', $placeholders_array);
+        
+        $merged_params = [];
+        foreach ($batch as $i => $row_params) {
+            foreach ($row_params as $key => $val) {
+                $merged_params[$key . '_' . $i] = $val;
+            }
+        }
+        
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($merged_params);
+    }
+    
     fclose($handle);
     return $count;
 }
