@@ -18,16 +18,11 @@ function get_pdo(): PDO {
         $pass   = getenv('DB_PASSWORD') ?: '';
     }
 
-    $dsn = "mysql:host=$host;port=$port;dbname=$dbname;charset=utf8mb4";
+    $dsn = "mysql:host=$host;port=$port;dbname=$dbname;charset=utf8mb4;ssl=0";
     $options = [
         PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
     ];
-    
-    // Disable SSL verification for Wasmer MySQL connection
-    if (defined('PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT')) {
-        $options[PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = false;
-    }
     
     return new PDO($dsn, $user, $pass, $options);
 }
