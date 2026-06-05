@@ -22,15 +22,23 @@ function get_pdo(): PDO {
     $options = [
         PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => false,
     ];
     
-    // Try to disable SSL verification and allow unencrypted connections
-    if (defined('PDO::MYSQL_ATTR_SSL_CAPATH')) {
-        $options[PDO::MYSQL_ATTR_SSL_CAPATH] = null;
+    // Disable all SSL verification and force no SSL
+    if (defined('PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT')) {
+        $options[PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = 0;
     }
     if (defined('PDO::MYSQL_ATTR_SSL_CA')) {
-        $options[PDO::MYSQL_ATTR_SSL_CA] = null;
+        $options[PDO::MYSQL_ATTR_SSL_CA] = false;
+    }
+    if (defined('PDO::MYSQL_ATTR_SSL_CAPATH')) {
+        $options[PDO::MYSQL_ATTR_SSL_CAPATH] = false;
+    }
+    if (defined('PDO::MYSQL_ATTR_SSL_KEY')) {
+        $options[PDO::MYSQL_ATTR_SSL_KEY] = false;
+    }
+    if (defined('PDO::MYSQL_ATTR_SSL_CERT')) {
+        $options[PDO::MYSQL_ATTR_SSL_CERT] = false;
     }
     
     return new PDO($dsn, $user, $pass, $options);
