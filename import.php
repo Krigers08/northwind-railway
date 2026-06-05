@@ -1,5 +1,5 @@
 <?php
-// import.php - Run this once to load CSV data into Postgres
+// import.php - Run this once to load CSV data into MySQL
 // Usage: php import.php  (or visit /import.php in browser, protected by secret)
 
 $secret = getenv('IMPORT_SECRET') ?: 'changeme';
@@ -20,7 +20,7 @@ function import_csv(PDO $pdo, string $file, string $table, array $columns, calla
     $count = 0;
     $cols = implode(', ', $columns);
     $placeholders = implode(', ', array_map(fn($c) => ":$c", $columns));
-    $stmt = $pdo->prepare("INSERT INTO $table ($cols) VALUES ($placeholders) ON CONFLICT DO NOTHING");
+    $stmt = $pdo->prepare("INSERT IGNORE INTO $table ($cols) VALUES ($placeholders)");
     while (($row = fgetcsv($handle)) !== false) {
         if ($transform) $row = $transform($row);
         if (!$row) continue;
